@@ -1,46 +1,115 @@
 using AccountContracts;
+using AccountServer.Data;
 using Grpc.Core;
 
 namespace AccountServer.Services
 {
     public class AccountGrpcService : AccountService.AccountServiceBase
     {
-        private static readonly Dictionary<int, AccountResponse> Accounts = new()
+        private readonly AccountStore _store;
+
+        public AccountGrpcService(AccountStore store)
         {
-            [1] = new AccountResponse 
-            {
-                Id = 1,
-                Username = "linecodesx",
-                Email = "linecodesx@example.com",
-                Role = "Admin"
-            },
-            [2] = new AccountResponse
-            {
-                Id = 2,
-                Username = "student",
-                Email = "student@example.com",
-                Role = "User"
-            }
-        };
+            _store = store;
+        }
 
         public override Task<AccountResponse> GetAccount(AccountRequest request, ServerCallContext ctx)
         {
             if (request.Id <= 0)
-        {
-            throw new RpcException(
-                new Status(StatusCode.InvalidArgument,
-                    "ID должен быть больше нуля."));
+            {
+                throw new RpcException(
+                    new Status(StatusCode.InvalidArgument,
+                        "ID должен быть больше нуля."));
+            }
+
+            var account = _store.Get(request.Id);
+
+            if (account is null)
+            {
+                throw new RpcException(
+                    new Status(StatusCode.NotFound,
+                        "Аккаунт не найден."));
+            }
+
+            return Task.FromResult(account);
         }
 
-        if (!Accounts.TryGetValue(request.Id, out var account))
+        public override Task<AccountList> GetAll(Empty request, ServerCallContext context)
         {
-            throw new RpcException(
-                new Status(StatusCode.NotFound,
-                    "Аккаунт не найден."));
+            var accountList = new AccountList();
+            accountList.Accounts.AddRange(_store.GetAll());
+
+            return Task.FromResult(accountList);
         }
 
-        return Task.FromResult(account.Clone());
-            
+        public override Task<AccountResponse> CreateAccount(CreateAccountRequest request, ServerCallContext context)
+        {
+            if (string.IsNullOrWhiteSpace(request.Username) ||
+                string.IsNullOrWhiteSpace(request.Email))
+            {
+                throw new RpcException(
+                    new Status(StatusCode.InvalidArgument,
+                        "Имя пользователя и email обязательны."));
+            }
+
+            var account = _store.Create(
+                request.Username,
+                request.Email,
+                request.Role);
+
+            return Task.FromResult(account);
+        }
+
+        public override Task<AccountResponse> UpdateAccount(UpdateAccountRequest request, ServerCallContext context)
+        {
+            if (request.Id <= 0)
+            {
+                throw new RpcException(
+                    new Status(StatusCode.InvalidArgument,
+                        "ID должен быть больше нуля."));
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Username) ||
+                string.IsNullOrWhiteSpace(request.Email))
+            {
+                throw new RpcException(
+                    new Status(StatusCode.InvalidArgument,
+                        "Имя пользователя и email обязательны."));
+            }
+
+            var account = _store.Update(
+                request.Id,
+                request.Username,
+                request.Email,
+                request.Role);
+
+            if (account is null)
+            {
+                throw new RpcException(
+                    new Status(StatusCode.NotFound,
+                        "Аккаунт не найден."));
+            }
+
+            return Task.FromResult(account);
+        }
+
+        public override Task<Empty> DeleteAccount(AccountRequest request, ServerCallContext context)
+        {
+            if (request.Id <= 0)
+            {
+                throw new RpcException(
+                    new Status(StatusCode.InvalidArgument,
+                        "ID должен быть больше нуля."));
+            }
+
+            if (!_store.Delete(request.Id))
+            {
+                throw new RpcException(
+                    new Status(StatusCode.NotFound,
+                        "Аккаунт не найден."));
+            }
+
+            return Task.FromResult(new Empty());
         }
     }
 }

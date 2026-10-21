@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Runtime account data
+/AccountServer/accounts.json
+/AccountServer/accounts.json.tmp
